@@ -19,6 +19,8 @@
     ]
   },
   "dependencies": {
+    "@fluidframework/aqueduct": "0.33.3",
+    "@fluidframework/get-tinylicious-container": "0.33.3",
     "@sentry/browser": "6.0.1",
     "@sentry/integrations": "6.0.1",
     "@testing-library/jest-dom": "5.11.9",

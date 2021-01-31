@@ -1,19 +1,22 @@
 import {
-  encryptAESGEM,
+  // encryptAESGEM,
   SocketUpdateData,
   SocketUpdateDataSource,
 } from "../data";
 
 import CollabWrapper from "./CollabWrapper";
 
-import { getSyncableElements } from "../../packages/excalidraw/index";
+// import { getSyncableElements } from "../../packages/excalidraw/index";
 import { ExcalidrawElement } from "../../element/types";
-import { BROADCAST, SCENE } from "../app_constants";
+// import { BROADCAST, SCENE } from "../app_constants";
+import { SCENE } from "../app_constants";
+import { IExcalidrawFluidData } from "./fluid";
 
 class Portal {
   collab: CollabWrapper;
-  socket: SocketIOClient.Socket | null = null;
-  socketInitialized: boolean = false; // we don't want the socket to emit any updates until it is fully initialized
+  // socket: SocketIOClient.Socket | null = null;
+  // socketInitialized: boolean = false; // we don't want the socket to emit any updates until it is fully initialized
+  excalidrawFluidData: IExcalidrawFluidData | null = null;
   roomId: string | null = null;
   roomKey: string | null = null;
   broadcastedElementVersions: Map<string, number> = new Map();
@@ -22,65 +25,76 @@ class Portal {
     this.collab = collab;
   }
 
-  open(socket: SocketIOClient.Socket, id: string, key: string) {
-    this.socket = socket;
-    this.roomId = id;
+  //open(socket: SocketIOClient.Socket, id: string, key: string) {
+  open(excalidrawFluidData: IExcalidrawFluidData, key: string) {
+    // this.socket = socket;
+    this.excalidrawFluidData = excalidrawFluidData;
+    this.roomId = this.excalidrawFluidData.roomId;
     this.roomKey = key;
 
+    // Handle all the things...
+    // this.excalidrawFluidData.runtime.getAudience().on('addMember', (clientId, details) => {
+    //   this.excalidrawFluidData?.runtime.submitSignal(SCENE.INIT)
+    // });
+
     // Initialize socket listeners
-    this.socket.on("init-room", () => {
-      if (this.socket) {
-        this.socket.emit("join-room", this.roomId);
-      }
-    });
-    this.socket.on("new-user", async (_socketId: string) => {
-      this.broadcastScene(
-        SCENE.INIT,
-        getSyncableElements(this.collab.getSceneElementsIncludingDeleted()),
-        /* syncAll */ true,
-      );
-    });
-    this.socket.on("room-user-change", (clients: string[]) => {
-      this.collab.setCollaborators(clients);
-    });
+    // this.socket.on("init-room", () => {
+    //   if (this.socket) {
+    //     this.socket.emit("join-room", this.roomId);
+    //   }
+    // });
+    // this.socket.on("new-user", async (_socketId: string) => {
+    //   this.broadcastScene(
+    //     SCENE.INIT,
+    //     getSyncableElements(this.collab.getSceneElementsIncludingDeleted()),
+    //     /* syncAll */ true,
+    //   );
+    // });
+    // this.socket.on("room-user-change", (clients: string[]) => {
+    //   this.collab.setCollaborators(clients);
+    // });
   }
 
   close() {
-    if (!this.socket) {
+    if (!this.excalidrawFluidData) {
       return;
     }
-    this.socket.close();
-    this.socket = null;
+
+    this.excalidrawFluidData.container.close();
     this.roomId = null;
     this.roomKey = null;
-    this.socketInitialized = false;
     this.broadcastedElementVersions = new Map();
   }
 
   isOpen() {
-    return !!(
-      this.socketInitialized &&
-      this.socket &&
-      this.roomId &&
-      this.roomKey
+    return (
+      this.excalidrawFluidData && this.excalidrawFluidData.container.connected
     );
+    // return !!(
+    //   this.socketInitialized &&
+    //   this.socket &&
+    //   this.roomId &&
+    //   this.roomKey
+    // );
   }
 
   async _broadcastSocketData(
     data: SocketUpdateData,
-    volatile: boolean = false,
+    _volatile: boolean = false,
   ) {
-    if (this.isOpen()) {
-      const json = JSON.stringify(data);
-      const encoded = new TextEncoder().encode(json);
-      const encrypted = await encryptAESGEM(encoded, this.roomKey!);
-      this.socket!.emit(
-        volatile ? BROADCAST.SERVER_VOLATILE : BROADCAST.SERVER,
-        this.roomId,
-        encrypted.data,
-        encrypted.iv,
-      );
-    }
+    // if (this.isOpen()) {
+    //   const json = JSON.stringify(data);
+    //   const encoded = new TextEncoder().encode(json);
+    //   const encrypted = await encryptAESGEM(encoded, this.roomKey!);
+    //   this.socket!.emit(
+    //     volatile ? BROADCAST.SERVER_VOLATILE : BROADCAST.SERVER,
+    //     this.roomId,
+    //     encrypted.data,
+    //     encrypted.iv,
+    //   );
+    // }
+
+    this.excalidrawFluidData?.runtime.submitSignal(data.type, data);
   }
 
   broadcastScene = async (
@@ -136,23 +150,31 @@ class Portal {
     pointer: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["pointer"];
     button: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["button"];
   }) => {
-    if (this.socket?.id) {
-      const data: SocketUpdateDataSource["MOUSE_LOCATION"] = {
-        type: "MOUSE_LOCATION",
-        payload: {
-          socketId: this.socket.id,
-          pointer: payload.pointer,
-          button: payload.button || "up",
-          selectedElementIds: this.collab.excalidrawAPI.getAppState()
-            .selectedElementIds,
-          username: this.collab.state.username,
-        },
-      };
-      return this._broadcastSocketData(
-        data as SocketUpdateData,
-        true, // volatile
-      );
-    }
+    this.excalidrawFluidData?.runtime.submitSignal("MOUSE_LOCATION", {
+      // socketId: this.socket.id,
+      pointer: payload.pointer,
+      button: payload.button || "up",
+      selectedElementIds: this.collab.excalidrawAPI.getAppState()
+        .selectedElementIds,
+      username: this.collab.state.username,
+    });
+    // if (this.socket?.id) {
+    //   const data: SocketUpdateDataSource["MOUSE_LOCATION"] = {
+    //     type: "MOUSE_LOCATION",
+    //     payload: {
+    //       socketId: this.socket.id,
+    //       pointer: payload.pointer,
+    //       button: payload.button || "up",
+    //       selectedElementIds: this.collab.excalidrawAPI.getAppState()
+    //         .selectedElementIds,
+    //       username: this.collab.state.username,
+    //     },
+    //   };
+    //   return this._broadcastSocketData(
+    //     data as SocketUpdateData,
+    //     true, // volatile
+    //   );
+    // }
   };
 }
 

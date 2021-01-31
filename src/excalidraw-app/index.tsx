@@ -57,6 +57,8 @@ languageDetector.init({
 
 const saveDebounced = debounce(
   (elements: readonly ExcalidrawElement[], state: AppState) => {
+    // eslint-disable-next-line no-console
+    console.log("debounce save to local storage");
     saveToLocalStorage(elements, state);
   },
   SAVE_TO_LOCAL_STORAGE_TIMEOUT,

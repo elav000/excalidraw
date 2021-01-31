@@ -13,16 +13,16 @@ import {
 import { Collaborator, Gesture } from "../../types";
 import { resolvablePromise, withBatchedUpdates } from "../../utils";
 import {
-  INITIAL_SCENE_UPDATE_TIMEOUT,
+  // INITIAL_SCENE_UPDATE_TIMEOUT,
   SCENE,
   SYNC_FULL_SCENE_INTERVAL_MS,
 } from "../app_constants";
 import {
-  decryptAESGEM,
+  // decryptAESGEM,
   generateCollaborationLink,
   getCollaborationLinkData,
   SocketUpdateDataSource,
-  SOCKET_SERVER,
+  // SOCKET_SERVER,
 } from "../data";
 import { isSavedToFirebase, saveToFirebase } from "../data/firebase";
 import {
@@ -33,6 +33,7 @@ import {
 import Portal from "./Portal";
 import RoomDialog from "./RoomDialog";
 import { createInverseContext } from "../../createInverseContext";
+import { getExcalidrawData } from "./fluid";
 
 interface CollabState {
   isCollaborating: boolean;
@@ -72,7 +73,7 @@ export { CollabContext, CollabContextConsumer };
 class CollabWrapper extends PureComponent<Props, CollabState> {
   portal: Portal;
   excalidrawAPI: Props["excalidrawAPI"];
-  private socketInitializationTimer?: NodeJS.Timeout;
+  // private socketInitializationTimer?: NodeJS.Timeout;
   private lastBroadcastedOrReceivedSceneVersion: number = -1;
   private collaborators = new Map<string, Collaborator>();
 
@@ -192,9 +193,9 @@ class CollabWrapper extends PureComponent<Props, CollabState> {
   };
 
   private initializeSocketClient = async (): Promise<ImportedDataState | null> => {
-    if (this.portal.socket) {
-      return null;
-    }
+    // if (this.portal.socket) {
+    //   return null;
+    // }
 
     const scenePromise = resolvablePromise<ImportedDataState | null>();
 
@@ -206,86 +207,97 @@ class CollabWrapper extends PureComponent<Props, CollabState> {
 
       // fallback in case you're not alone in the room but still don't receive
       // initial SCENE_UPDATE message
-      this.socketInitializationTimer = setTimeout(() => {
-        this.initializeSocket();
-        scenePromise.resolve(null);
-      }, INITIAL_SCENE_UPDATE_TIMEOUT);
+      // this.socketInitializationTimer = setTimeout(() => {
+      //   this.initializeSocket();
+      //   scenePromise.resolve(null);
+      // }, INITIAL_SCENE_UPDATE_TIMEOUT);
 
-      const { default: socketIOClient }: any = await import(
-        /* webpackChunkName: "socketIoClient" */ "socket.io-client"
-      );
+      // const { default: socketIOClient }: any = await import(
+      //   /* webpackChunkName: "socketIoClient" */ "socket.io-client"
+      // );
 
-      this.portal.open(socketIOClient(SOCKET_SERVER), roomId, roomKey);
+      const excalidrawData = await getExcalidrawData(roomId);
+
+      // this.portal.open(socketIOClient(SOCKET_SERVER), roomId, roomKey);
+      this.portal.open(excalidrawData, roomKey);
+
+      this.portal.excalidrawFluidData?.runtime.on("signal", (message) => {
+        switch (message.type) {
+          case "MOUSE_LOCATION":
+            // eslint-disable-next-line no-console
+            console.log("got mouse update");
+        }
+      });
 
       // All socket listeners are moving to Portal
-      this.portal.socket!.on(
-        "client-broadcast",
-        async (encryptedData: ArrayBuffer, iv: Uint8Array) => {
-          if (!this.portal.roomKey) {
-            return;
-          }
-          const decryptedData = await decryptAESGEM(
-            encryptedData,
-            this.portal.roomKey,
-            iv,
-          );
+      // this.portal.socket!.on(
+      //   "client-broadcast",
+      //   async (encryptedData: ArrayBuffer, iv: Uint8Array) => {
+      //     if (!this.portal.roomKey) {
+      //       return;
+      //     }
+      //     const decryptedData = await decryptAESGEM(
+      //       encryptedData,
+      //       this.portal.roomKey,
+      //       iv,
+      //     );
 
-          switch (decryptedData.type) {
-            case "INVALID_RESPONSE":
-              return;
-            case SCENE.INIT: {
-              if (!this.portal.socketInitialized) {
-                const remoteElements = decryptedData.payload.elements;
-                const reconciledElements = this.reconcileElements(
-                  remoteElements,
-                );
-                this.handleRemoteSceneUpdate(reconciledElements, {
-                  init: true,
-                });
-                this.initializeSocket();
-                scenePromise.resolve({ elements: reconciledElements });
-              }
-              break;
-            }
-            case SCENE.UPDATE:
-              this.handleRemoteSceneUpdate(
-                this.reconcileElements(decryptedData.payload.elements),
-              );
-              break;
-            case "MOUSE_LOCATION": {
-              const {
-                pointer,
-                button,
-                username,
-                selectedElementIds,
-              } = decryptedData.payload;
-              const socketId: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["socketId"] =
-                decryptedData.payload.socketId ||
-                // @ts-ignore legacy, see #2094 (#2097)
-                decryptedData.payload.socketID;
+      //     switch (decryptedData.type) {
+      //       case "INVALID_RESPONSE":
+      //         return;
+      //       case SCENE.INIT: {
+      //         if (!this.portal.socketInitialized) {
+      //           const remoteElements = decryptedData.payload.elements;
+      //           const reconciledElements = this.reconcileElements(
+      //             remoteElements,
+      //           );
+      //           this.handleRemoteSceneUpdate(reconciledElements, {
+      //             init: true,
+      //           });
+      //           this.initializeSocket();
+      //           scenePromise.resolve({ elements: reconciledElements });
+      //         }
+      //         break;
+      //       }
+      //       case SCENE.UPDATE:
+      //         this.handleRemoteSceneUpdate(
+      //           this.reconcileElements(decryptedData.payload.elements),
+      //         );
+      //         break;
+      //       case "MOUSE_LOCATION": {
+      //         const {
+      //           pointer,
+      //           button,
+      //           username,
+      //           selectedElementIds,
+      //         } = decryptedData.payload;
+      //         const socketId: SocketUpdateDataSource["MOUSE_LOCATION"]["payload"]["socketId"] =
+      //           decryptedData.payload.socketId ||
+      //           // @ts-ignore legacy, see #2094 (#2097)
+      //           decryptedData.payload.socketID;
 
-              const collaborators = new Map(this.collaborators);
-              const user = collaborators.get(socketId) || {}!;
-              user.pointer = pointer;
-              user.button = button;
-              user.selectedElementIds = selectedElementIds;
-              user.username = username;
-              collaborators.set(socketId, user);
-              this.excalidrawAPI.updateScene({
-                collaborators,
-              });
-              break;
-            }
-          }
-        },
-      );
-      this.portal.socket!.on("first-in-room", () => {
-        if (this.portal.socket) {
-          this.portal.socket.off("first-in-room");
-        }
-        this.initializeSocket();
-        scenePromise.resolve(null);
-      });
+      //         const collaborators = new Map(this.collaborators);
+      //         const user = collaborators.get(socketId) || {}!;
+      //         user.pointer = pointer;
+      //         user.button = button;
+      //         user.selectedElementIds = selectedElementIds;
+      //         user.username = username;
+      //         collaborators.set(socketId, user);
+      //         this.excalidrawAPI.updateScene({
+      //           collaborators,
+      //         });
+      //         break;
+      //       }
+      //     }
+      //   },
+      // );
+      // this.portal.socket!.on("first-in-room", () => {
+      //   if (this.portal.socket) {
+      //     this.portal.socket.off("first-in-room");
+      //   }
+      //   this.initializeSocket();
+      //   scenePromise.resolve(null);
+      // });
 
       this.setState({
         isCollaborating: true,
@@ -298,10 +310,10 @@ class CollabWrapper extends PureComponent<Props, CollabState> {
     return null;
   };
 
-  private initializeSocket = () => {
-    this.portal.socketInitialized = true;
-    clearTimeout(this.socketInitializationTimer!);
-  };
+  // private initializeSocket = () => {
+  //   this.portal.socketInitialized = true;
+  //   clearTimeout(this.socketInitializationTimer!);
+  // };
 
   private reconcileElements = (
     elements: readonly ExcalidrawElement[],
@@ -423,7 +435,7 @@ class CollabWrapper extends PureComponent<Props, CollabState> {
     pointersMap: Gesture["pointers"];
   }) => {
     payload.pointersMap.size < 2 &&
-      this.portal.socket &&
+      this.portal.excalidrawFluidData &&
       this.portal.broadcastMouseLocation(payload);
   };
 
